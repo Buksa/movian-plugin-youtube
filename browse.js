@@ -14,7 +14,7 @@ function parseISO8601Duration(s) {
 
 
 function trimlf(s) {
-  return s.replace(/(\r\n|\n|\r)/gm,"");
+  return s.replace(/(\r\n|\n|\r)/gm," ");
 }
 
 var channelImageSetSizes = {
@@ -69,7 +69,6 @@ function makeImageSet(thumbnails, sizemap) {
   return 'imageset:' + JSON.stringify(images);
 }
 
-
 function populatePageFromResults(page, result) {
   var items = {};
   var allvideos = [];
@@ -86,8 +85,11 @@ function populatePageFromResults(page, result) {
       allvideos.push(vid);
       items[vid] = page.appendItem(URI, 'video', {
         title: item.snippet.title,
-        icon: makeImageSet(item.snippet.thumbnails, videoImageSetSizes),
-        description: trimlf(item.snippet.description)
+        icon: 'http://i.ytimg.com/vi/'+vid+'/mqdefault.jpg',
+        //icon: makeImageSet(item.snippet.thumbnails, videoImageSetSizes),
+        description: trimlf(item.snippet.description),
+		genre: "Date: "+item.snippet.publishedAt.substr(0,10),
+		tagline: "Added: "+item.snippet.publishedAt.substr(0,10),
       });
       break;
 
@@ -102,13 +104,15 @@ function populatePageFromResults(page, result) {
         break;
 
       case 'youtube#video':
-        URI = PREFIX + ":video:" + item.id.videoId;
-        allvideos.push(item.id.videoId);
-        items[item.id.videoId] = page.appendItem(URI, 'video', {
-          title: item.snippet.title,
-          icon: makeImageSet(item.snippet.thumbnails, videoImageSetSizes),
-          description: trimlf(item.snippet.description)
-        });
+		URI = PREFIX + ":video:" + item.id.videoId;
+		allvideos.push(item.id.videoId);
+		items[item.id.videoId] = page.appendItem(URI, 'video', {
+			title: item.snippet.title,
+			icon: 'http://i.ytimg.com/vi/'+item.id.videoId+'/mqdefault.jpg', //makeImageSet(item.snippet.thumbnails, videoImageSetSizes),
+			description: trimlf(item.snippet.description),
+			genre: "Date: "+item.snippet.publishedAt.substr(0,10),
+		});
+		  //items[item.id.videoId].date = item.snippet.publishedAt;
         break;
 
       case 'youtube#channel':
@@ -130,7 +134,28 @@ function populatePageFromResults(page, result) {
 
       switch(item.snippet.resourceId.kind) {
       case 'youtube#channel':
-        URI = PREFIX + ":channel:" + item.snippet.resourceId.channelId;
+        var ch = page.appendItem(PREFIX + ":channel:" + item.snippet.resourceId.channelId, 'video', {
+        title: item.snippet.title,
+        icon: 'imageset:' + JSON.stringify(item.snippet.thumbnails),
+		description: trimlf(item.snippet.description),
+      });
+
+		  var aux = {
+			id: item.id,
+			item: ch,
+		  };
+
+		  aux.unsubscribe = aux.item.addOptAction('Unsubscribe from ' + item.snippet.title, function() {
+			api.subscriptions(this.id, 'del', function(ok) {
+			  if(ok) {
+				aux.item.destroyOption(this.unsubscribe);
+				popup.notify('You are now unsubscribed from this channel', 5);
+			  } else {
+				popup.notify('Request for channel unsubscription failed!', 5);
+			  }
+			}.bind(this));
+		  }.bind(aux), 'cancel');
+
         break;
       default:
         print("Unknown resource.kind in result: " + item.snippet.resourceId.kind);
@@ -138,10 +163,6 @@ function populatePageFromResults(page, result) {
         return;
       }
 
-      page.appendItem(URI, 'directory', {
-        title: item.snippet.title,
-        icon: 'imageset:' + JSON.stringify(item.snippet.thumbnails)
-      });
       break;
 
     case 'youtube#videoCategory':
@@ -153,7 +174,8 @@ function populatePageFromResults(page, result) {
 
     case 'youtube#playlist':
       page.appendItem(PREFIX + ":playlist:" + item.id, 'playlist', {
-        title: item.snippet.title
+        title: item.snippet.title,
+		icon: item.snippet.thumbnails.medium.url,
       });
       break;
 
@@ -161,21 +183,6 @@ function populatePageFromResults(page, result) {
       page.appendItem(PREFIX + ":channel:" + item.id, 'directory', {
         title: item.snippet.title,
         icon: makeImageSet(item.snippet.thumbnails, channelImageSetSizes),
-      });
-      break;
-
-    case 'youtube#activity':
-      if(item.snippet.type == 'recommendation') {
-        var vid = item.contentDetails.recommendation.resourceId.videoId;
-      } else {
-        var vid = item.contentDetails.upload.videoId;
-      }
-
-      URI = PREFIX + ":video:" + vid;
-      allvideos.push(vid);
-      items[vid] = page.appendItem(PREFIX + ":video:" + vid, 'video', {
-        title: item.snippet.title,
-        icon: makeImageSet(item.snippet.thumbnails, videoImageSetSizes),
       });
       break;
 
@@ -220,6 +227,10 @@ function populatePageFromResults(page, result) {
           }
         }.bind(this));
       }.bind(aux), 'thumb_down');
+
+      if(playlists.length)
+          item.addOptURL('Add to Playlist',
+							PREFIX + ':playlistadd:'+vid+':', 'add');
     }
 
     require('./api').call('videos', {
@@ -237,11 +248,40 @@ function populatePageFromResults(page, result) {
         metadata.viewCount    = parseInt(item.statistics.viewCount);
         metadata.likeCount    = parseInt(item.statistics.likeCount);
         metadata.dislikeCount = parseInt(item.statistics.dislikeCount);
+		likes = item.statistics.likeCount;
+		views = item.statistics.viewCount;
+		metadata.rating = parseInt(((likes)/(parseInt(likes)+parseInt(metadata.dislikeCount)))*100);
+
+		if(likes>5000 && likes<1000000) likes=parseInt(likes*10/1000)/10+"k";
+		else if(likes>1000000) likes=parseInt(likes*10/1000000)/10+"m";
+		if(views>5000 && views<1000000) views=parseInt(views*10/1000)/10+"k";
+		else if(views>1000000) views=parseInt(views*10/1000000)/10+"m";
+		metadata.genre		  = "Date: "+item.snippet.publishedAt.substr(0,10)+"\r\nViews: "+views+"\r\nLikes: "+likes;
 
         if(item.snippet.channelId)
-          items[itemid].addOptURL('Goto channel ' + item.snippet.channelTitle,
+	    {
+          items[itemid].addOptURL('Visit the Channel',
                                   PREFIX + ":channel:" + item.snippet.channelId,
                                  'tv');
+
+		  var aux = {
+			ch: item.snippet.channelId,
+			item: items[itemid],
+			title: item.snippet.channelTitle
+		  };
+
+		  aux.subscribe = aux.item.addOptAction('Subscribe to ' + item.snippet.channelTitle, function() {
+			api.subscriptions(this.ch, 'add', function(ok) {
+			  if(ok) {
+				aux.item.destroyOption(this.subscribe);
+				popup.notify('You are now subscribed to ' + this.title, 5);
+			  } else {
+				popup.notify('Request for channel subscription failed!', 5);
+			  }
+			}.bind(this));
+		  }.bind(aux), 'favorite');
+
+		}
       }
     });
   }
@@ -275,6 +315,147 @@ exports.browse = function(endpoint, page, query) {
   page.asyncPaginator = loader;
 }
 
+exports.browse2 = function(endpoint, page, query) {
+
+	page.loading = false;
+	page.type = 'directory';
+	query.part = 'snippet';
+	query.order = 'relevance';
+	query.maxResults = 15;
+
+	var items = {};
+	var allvideos = [];
+
+	var result = require('./api').call2(endpoint, query);
+
+		if(result && result.pageInfo && result.pageInfo.totalResults === 0) {
+			showNoContent(page);
+			return;
+		}
+
+		for(var j = 0; j < result.items.length; j++) {
+
+			var item = result.items[j];
+
+			if(item.kind === 'youtube#subscription')
+			{
+				var item = result.items[j];
+
+				if(item.snippet.resourceId.kind === 'youtube#channel') 
+				{
+					query.order = 'date';
+					query.part = 'snippet';
+					query.maxResults = 5;
+					query.channelId = item.snippet.resourceId.channelId;
+
+					var result2 = require('./api').call2('search', query);
+
+						if(result2 && result2.pageInfo && result2.pageInfo.totalResults)
+						{
+							  for(var i = 0; i < result2.items.length; i++) {
+
+								var item = result2.items[i];
+
+								switch(item.kind) {
+								case 'youtube#searchResult':
+
+								  switch(item.id.kind) {
+								  case 'youtube#playlist':
+									items[item.id.videoId] = page.appendItem(PREFIX + ":playlist:" + item.id.playlistId, 'playlist', {
+									  title: item.snippet.title,
+									  icon: 'imageset:' + JSON.stringify(item.snippet.thumbnails),
+									});
+									items[item.id.videoId].date=item.snippet.publishedAt;
+
+									break;
+
+								  case 'youtube#video':
+									items[item.id.videoId] = page.appendItem(PREFIX + ":video:" + item.id.videoId, 'video', {
+										title: item.snippet.title,
+										icon: 'http://i.ytimg.com/vi/'+item.id.videoId+'/mqdefault.jpg', //makeImageSet(item.snippet.thumbnails, videoImageSetSizes),
+										description: trimlf(item.snippet.description),
+										tagline: "Added: "+item.snippet.publishedAt.substr(0,10),
+									});
+									items[item.id.videoId].date=item.snippet.publishedAt;
+
+									if(item.snippet.channelId)
+										items[item.id.videoId].addOptURL('Visit the Channel [' + item.snippet.channelTitle + ']',
+											  PREFIX + ":channel:" + item.snippet.channelId,
+											 'tv');
+
+									break;
+
+								  default:
+									  break;
+
+								  }
+								  break;
+
+								default:
+								  break;
+								}
+							  }
+						}
+				}
+
+				var items2=page.getItems();
+				var il=items2.length;
+
+				if(il>1)
+				{
+					for (var k=0; k<il-1; k++)
+					{
+						for (var l=0; l<(il-k-1); l++)
+						{
+							if(items2[l].date<items2[l+1].date)
+							{
+								items2[l+1].moveBefore(items2[l]);
+								items2=page.getItems();
+							}
+						}
+					}
+				}
+			}
+		}
+
+
+/*
+	  if(allvideos.length > 0) {
+
+		result = require('./api').call2('videos', {
+		  id: allvideos.join(),
+		  part: 'snippet,contentDetails,statistics'
+		});
+
+		  for(var i = 0; i < result.items.length; i++) {
+			var item = result.items[i];
+			var itemid = item.id;
+			var metadata = items[itemid].root.metadata;
+
+			metadata.duration     = parseISO8601Duration(item.contentDetails.duration);
+			metadata.description  = trimlf(item.snippet.description);
+			metadata.viewCount    = parseInt(item.statistics.viewCount);
+			metadata.likeCount    = parseInt(item.statistics.likeCount);
+			metadata.dislikeCount = parseInt(item.statistics.dislikeCount);
+			likes = item.statistics.likeCount;
+			views = item.statistics.viewCount;
+			metadata.rating = parseInt(((likes)/(parseInt(likes)+parseInt(metadata.dislikeCount)))*100);
+
+			if(likes>5000 && likes<1000000) likes=parseInt(likes*10/1000)/10+"k";
+			else if(likes>1000000) likes=parseInt(likes*10/1000000)/10+"m";
+			if(views>5000 && views<1000000) views=parseInt(views*10/1000)/10+"k";
+			else if(views>1000000) views=parseInt(views*10/1000000)/10+"m";
+			metadata.genre		  = "Date: "+item.snippet.publishedAt.substr(0,10)+"\r\nViews: "+views+"\r\nLikes: "+likes;
+
+			if(item.snippet.channelId)
+			{
+			  items[itemid].addOptURL('Visit the Channel',
+									  PREFIX + ":channel:" + item.snippet.channelId,
+									 'tv');
+			}
+		  }
+	  }*/
+}
 
 function showNoContent(page) {
   page.flush();
@@ -317,8 +498,8 @@ exports.search = function(page, query) {
   }
 
   page.options.createMultiOpt('order', 'Order by', [
-    ['relevance',  'Relevance', true],
-    ['date',       'Date'],
+    ['relevance',  'Relevance'],
+    ['date',       'Date', true],
     ['title',      'Title'],
     ['rating',     'Rating'],
     ['videoCount', 'Videos'],

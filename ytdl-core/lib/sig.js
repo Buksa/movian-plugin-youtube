@@ -23,7 +23,7 @@ exports.getTokens = function(html5playerfile, options, callback) {
     key = rs[1];
     cachedTokens = cache.get(key);
   } else {
-    console.warn('could not extract html5player key:', html5playerfile);
+    //console.warn('could not extract html5player key:', html5playerfile);
   }
   if (cachedTokens) {
     callback(null, cachedTokens);

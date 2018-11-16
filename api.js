@@ -86,7 +86,7 @@ io.httpInspectorCreate('https://www.googleapis.com/youtube/v3/.*', function(ctrl
   prop.setParent(popup, prop.global.popups);
 
   var timer = null;
-  var interval = 3000;
+  var interval = 4000;
 
   // Check if user have accepted in a loop
   function checktoken() {
@@ -166,7 +166,6 @@ io.httpInspectorCreate('https://www.googleapis.com/youtube/v3/.*', function(ctrl
 //-----------------------------------------------------------------------
 exports.call = function(endpoint, params, page, cb) {
   var URL = 'https://www.googleapis.com/youtube/v3/' + endpoint;
-
   var opts = {
     args: [{key: KEY}, params || {}],
     noFail: true,       // Don't throw on HTTP errors (400- status code)
@@ -201,6 +200,18 @@ exports.call = function(endpoint, params, page, cb) {
   });
 }
 
+exports.call2 = function(endpoint, params) {
+  var URL = 'https://www.googleapis.com/youtube/v3/' + endpoint;
+  var opts = {
+    args: [{key: KEY}, params || {}],
+    noFail: true,       // Don't throw on HTTP errors (400- status code)
+    compression: true,  // Will send 'Accept-Encoding: gzip' in request
+    caching: true,      // Enables Movian's built-in HTTP cache
+  };
+
+  return JSON.parse(http.request(URL, opts).toString());
+}
+
 exports.rate = function(video, rating, cb) {
   var URL = 'https://www.googleapis.com/youtube/v3/videos/rate';
 
@@ -222,4 +233,90 @@ exports.rate = function(video, rating, cb) {
       cb(result.statuscode == 204);
     }
   });
+}
+
+exports.subscriptions = function(channel, action, cb) {
+  var URL = 'https://www.googleapis.com/youtube/v3/subscriptions';
+
+  var data = {};
+  var opts = {};
+
+	if (action === "add")
+	{
+	  data = {
+		snippet: { 
+			resourceId: {
+				channelId: channel,
+				kind: "youtube#channel"
+			}
+		}
+	  }
+			
+	opts = {
+		args: {
+		  key: KEY,
+		  part: 'snippet'
+		},
+		headers: {
+		  "Content-Type": 'application/json'
+		},
+		postdata: JSON.stringify(data),
+		noFail: true,
+		method: "POST"
+	  };
+	}
+	else
+	{
+	opts = {
+		args: {
+		  key: KEY,
+		  id: channel
+		},
+		noFail: true,
+		method: "DELETE"
+	  };
+	}
+
+  http.request(URL, opts, function(err, result) {
+    if(err) {
+      cb(false);
+    } else {
+      cb(true);
+    }
+  });
+
+}
+
+exports.addplayitem = function(video, playlist) {
+  var URL = 'https://www.googleapis.com/youtube/v3/playlistItems';
+
+  var data = {};
+  var opts = {};
+
+	  data = {
+		snippet: {
+			position: 0,
+			playlistId: playlist,
+			resourceId: {
+				videoId: video,
+				kind: "youtube#video"
+			}
+		}
+	  }
+			
+	opts = {
+		args: {
+		  key: KEY,
+		  part: 'snippet'
+		},
+		headers: {
+		  "Content-Type": 'application/json'
+		},
+		postdata: JSON.stringify(data),
+		noFail: true,
+		method: "POST",
+		debug: false
+	  };
+
+	http.request(URL, opts);
 }
