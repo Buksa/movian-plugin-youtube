@@ -3,7 +3,8 @@
 // needs the same one.
 //
 // The cache is very simplistic, shared, and it only needs get and set.
-exports.store = {};
+//exports.store = {};
+exports.store = require('showtime/store').create('htmlTokens');
 
 
 /**

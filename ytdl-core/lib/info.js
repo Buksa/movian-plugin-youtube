@@ -39,54 +39,52 @@ module.exports = function getInfo(link, options, callback) {
   var id = util.getVideoID(link);
 
   // Try getting config from the video page first.
-  var url = VIDEO_URL + id;
+  var url = EMBED_URL + id;
   myrequest(url, options.requestOptions, function(err, body) {
     if (err) return callback(err);
 
-    // Check if this video exists.
-    var unavailableMsg = util.between(body, '<h1 id="unavailable-message" class="message">', '</h1>');
-    if (unavailableMsg) {
-      if (unavailableMsg.trim() == 'This video does not exist.') {
-        return callback(new Error('Video not found'));
-      }
-    }
-
     // Get description from #eow-description.
-    var description = util.getVideoDescription(body);
+    var description = ""; //util.getVideoDescription(body);
 
-    var jsonStr = util.between(body, 'ytplayer.config = ', '</script>');
-    if (jsonStr) {
-      jsonStr = jsonStr.slice(0, jsonStr.lastIndexOf(';ytplayer.load'));
-      var config;
-      try {
-        config = JSON.parse(jsonStr);
-      } catch (err) {
-        return callback(new Error('Error parsing config: ' + err.message));
-      }
-      if (!config) {
-        return callback(new Error('Could not parse video page config'));
-      }
-      gotConfig(id, options, description, config, callback);
+	config = util.between(body, 't.setConfig({\'PLAYER_CONFIG\': ', '}})');
+	if (config) {
+		try {
+		  config = JSON.parse(config + '}');
+		} catch (err) {
+		  return callback(new Error('Error parsing config: ' + err.message));
+		}
+		gotConfig(id, options, description, config, callback);
+	}
+	else
+    {
+	  url = VIDEO_URL + id;
+	  myrequest(url, options.requestOptions, function(err, body) {
+		if (err) return callback(err);
 
-    } else {
-      // If the video page doesn't work, maybe because it has mature content
-      // and requires an account logged into view, try the embed page.
-      url = EMBED_URL + id;
-      myrequest(url, options.requestOptions, function(err, body) {
-        if (err) return callback(err);
+		// Check if this video exists.
+		var unavailableMsg = util.between(body, '<h1 id="unavailable-message" class="message">', '</h1>');
+		if (unavailableMsg) {
+		  if (unavailableMsg.trim() == 'This video does not exist.') {
+			return callback(new Error('Video not found'));
+		  }
+		}
 
-        config = util.between(body, 't.setConfig({\'PLAYER_CONFIG\': ', '},\'');
-        if (!config) {
-          return callback(new Error('Could not find `player config`'));
-        }
-        try {
-          config = JSON.parse(config + '}');
-        } catch (err) {
-          return callback(new Error('Error parsing config: ' + err.message));
-        }
-        gotConfig(id, options, description, config, callback);
+		var jsonStr = util.between(body, 'ytplayer.config = ', '</script>');
+		if (jsonStr) {
+		  jsonStr = jsonStr.slice(0, jsonStr.lastIndexOf(';ytplayer.load'));
+		  var config;
+		  try {
+			config = JSON.parse(jsonStr);
+		  } catch (err) {
+			return callback(new Error('Error parsing config: ' + err.message));
+		  }
+		  if (!config) {
+			return callback(new Error('Could not parse video page config'));
+		  }
+		  gotConfig(id, options, description, config, callback);
+		}
       });
-    }
+	  }
   });
 };
 

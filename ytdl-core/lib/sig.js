@@ -17,13 +17,13 @@ var VIDEO_URL = 'https://www.youtube.com/watch?v=';
  */
 exports.getTokens = function(html5playerfile, options, callback) {
   var key, cachedTokens;
-  var rs = /(?:html5)?player-([a-zA-Z0-9\-_]+)(?:\.js|\/)/
+  var rs = /(?:html5)?player[-_]([a-zA-Z0-9\-_]+)(?:\.js|\/)/
     .exec(html5playerfile);
   if (rs) {
     key = rs[1];
     cachedTokens = cache.get(key);
   } else {
-    console.warn('could not extract html5player key:', html5playerfile);
+    console.log('could not extract html5player key:', html5playerfile);
   }
   if (cachedTokens) {
     callback(null, cachedTokens);
